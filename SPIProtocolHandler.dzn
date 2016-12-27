@@ -1,0 +1,58 @@
+import BinaryInput.dzn;
+import BinaryOutput.dzn;
+
+interface ILatch
+{
+  extern integer $int$;
+  in void enable(integer input_port, integer output_port);
+  in void disable();  
+  
+  behaviour
+  {
+    on enable:{}
+    on disable:{}
+  }
+}
+
+component Latch
+{
+  provides ILatch latch;
+  requires ILogicalBinaryInput  input;
+  requires ILogicalBinaryOutput output;
+  
+  behaviour
+  {
+    enum State {Enabled, Disabled};
+    State state = State.Disabled;
+    [state.Disabled]
+    {
+      on latch.enable(input_port, output_port): InitializeLatch(input_port, output_port);
+      on latch.disable(): {}      
+    }
+    [state.Enabled]
+    {
+      on latch.disable(): {input.terminate(); output.terminate(); state = State.Disabled;}
+      on latch.enable(input_port, output_port): {}
+      on input.fallingEdge(): {output.reset();} 
+      on input.risingEdge(): {output.set();}      
+    }
+
+    void InitializeLatch(ILogicalBinaryInput.PortNr input_port, ILogicalBinaryOutput.PortNr output_port)
+    {
+      ILogicalBinaryInput.LogicalState localState = input.initialize(input_port);
+
+      bool inputHigh = (localState == ILogicalBinaryInput.LogicalState.High);
+      if (inputHigh)
+      {
+        output.initHigh(output_port);
+      }
+      else
+      {
+        output.initLow(output_port);        
+      }
+      state = State.Enabled;
+    }   
+    
+  }  
+}
+

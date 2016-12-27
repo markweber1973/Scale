@@ -1,10 +1,10 @@
- extern integer $int$;
-  
+ 
 interface IHardwareBinaryInput
 {
+  extern PortNr $int$;  
   enum BinaryState { High, Low };
 	   
-  in   BinaryState readCurrentState(integer port_nr);   	
+  in   BinaryState readCurrentState(PortNr port_nr);   	
   out  void risingEdgeDetected();
   out  void fallingEdgeDetected();
 
@@ -19,10 +19,11 @@ interface IHardwareBinaryInput
 
 interface ILogicalBinaryInput
 {
+  extern PortNr $int$;  
   enum LogicalState { High, Low, NotInitialised};	
       
-  in LogicalState initialize(integer port_nr);  	
-  in LogicalState terminate();  
+  in LogicalState initialize(PortNr port_nr);  	
+  in void terminate();  
   in LogicalState readCurrentState();
   out void risingEdge();
   out void fallingEdge();  
@@ -43,7 +44,7 @@ interface ILogicalBinaryInput
       on readCurrentState: reply(LogicalState.High);    
       on readCurrentState: reply(LogicalState.Low);
       on initialize: illegal;
-      on terminate: {operationalState = OperationalState.NotInitialised ; reply(LogicalState.NotInitialised);}                 
+      on terminate: {operationalState = OperationalState.NotInitialised;}                 
 
       on optional:  { risingEdge;}       
       on optional:  { fallingEdge;}
@@ -73,7 +74,7 @@ component LogicalBinaryInput
       on binaryInput.fallingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.Low; logicalInput.fallingEdge();}
       on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.High);
       on logicalInput.initialize(): illegal;
-      on logicalInput.terminate(): {terminate();}
+      on logicalInput.terminate(): {state = ILogicalBinaryInput.LogicalState.NotInitialised;}
     }
     [state.Low]
     {
@@ -81,10 +82,10 @@ component LogicalBinaryInput
     	on binaryInput.fallingEdgeDetected(): { }
     	on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.Low);
     	on logicalInput.initialize(): illegal;
-      on logicalInput.terminate(): {terminate();}    	
+      on logicalInput.terminate(): {state = ILogicalBinaryInput.LogicalState.NotInitialised;}    	
     }
      
-    void initializeFromHardware(integer port_nr)
+    void initializeFromHardware(ILogicalBinaryInput.PortNr port_nr)
     {
       IHardwareBinaryInput.BinaryState s = binaryInput.readCurrentState(port_nr);
       if (s == IHardwareBinaryInput.BinaryState.High) 
@@ -97,12 +98,6 @@ component LogicalBinaryInput
       	state = ILogicalBinaryInput.LogicalState.Low;
       	reply(ILogicalBinaryInput.LogicalState.Low);      	
       }
-    }
-
-    void terminate()
-    {
-    	state = ILogicalBinaryInput.LogicalState.NotInitialised;
-    	reply(ILogicalBinaryInput.LogicalState.NotInitialised); 
     }
   }	
 }

@@ -1,27 +1,28 @@
- extern integer $int$;
-  
-interface IHardwareBinaryOutput
-{
+ interface IHardwareBinaryOutput
+{   
   enum BinaryState { High, Low };
-	   
-  in   BinaryState writeCurrentState(integer port_nr);   	
-
+  extern  PortNr $int$;
+    
+  in void set(PortNr port_nr);
+  in void reset(PortNr port_nr);   	
+  
   behaviour
   {
-    on set: reply(BinaryState.High);		
-    on reset: reply(BinaryState.Low);       
+    on set: {}		
+    on reset: {}       
   }
 }
 
-interface ILogicalBinaryInput
-{
-  enum LogicalState { High, Low, NotInitialised};	
-      
-  in LogicalState initialize(integer port_nr);  	
-  in LogicalState terminate();  
-  in LogicalState readCurrentState();
-  out void risingEdge();
-  out void fallingEdge();  
+enum LogicalState { High, Low, NotInitialised};
+
+interface ILogicalBinaryOutput 
+{      
+  extern PortNr $int$;  
+  in void initHigh(PortNr port_nr);    
+  in void initLow(PortNr port_nr);  
+  in void terminate();  
+  in void set();
+  in void reset();     
 
   behaviour
   {
@@ -29,76 +30,72 @@ interface ILogicalBinaryInput
     OperationalState operationalState = OperationalState.NotInitialised; 
     [operationalState.NotInitialised]
     {
-      on readCurrentState: reply(LogicalState.NotInitialised);
-      on initialize: {operationalState = OperationalState.Initialised; reply(LogicalState.Low);}
-      on initialize: {operationalState = OperationalState.Initialised; reply(LogicalState.High);}      
-      on terminate:  illegal;             		
+      on initLow: {operationalState = OperationalState.Initialised;}      
+      on initHigh: {operationalState = OperationalState.Initialised;}
+     
+      on terminate: illegal;
+      on set: illegal;                       
+      on reset: illegal;
     }
     [operationalState.Initialised]
     {
-      on readCurrentState: reply(LogicalState.High);    
-      on readCurrentState: reply(LogicalState.Low);
-      on initialize: illegal;
-      on terminate: {operationalState = OperationalState.NotInitialised ; reply(LogicalState.NotInitialised);}                 
-
-      on optional:  { risingEdge;}       
-      on optional:  { fallingEdge;}
+      on initLow: illegal;
+      on initHigh: illegal;      
+      on terminate: {operationalState = OperationalState.NotInitialised;}
+      on set: {}                 
+      on reset: {}
     }       
   }
 }
 
-component LogicalBinaryInput
-{
-  provides ILogicalBinaryInput 	logicalInput;
-  requires IHardwareBinaryInput binaryInput;
+component LogicalBinaryOutput
+{ 
+  requires IHardwareBinaryOutput hardwareBinaryOutput;
+  provides ILogicalBinaryOutput  logicalBinaryOutput;
   
   behaviour
   {
-    ILogicalBinaryInput.LogicalState state = ILogicalBinaryInput.LogicalState.NotInitialised;
+    LogicalState state = LogicalState.NotInitialised;
+    ILogicalBinaryOutput.PortNr output_nr;
     [state.NotInitialised]
     {
-      on binaryInput.risingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.NotInitialised;}
-      on binaryInput.fallingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.NotInitialised;}
-      on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.NotInitialised);
-      on logicalInput.initialize(port_nr): { initializeFromHardware(port_nr); }
-      on logicalInput.terminate(): illegal;    	
+      on logicalBinaryOutput.set(): illegal;
+      on logicalBinaryOutput.reset(): illegal;
+      on logicalBinaryOutput.terminate(): illegal;
+      on logicalBinaryOutput.initHigh(port_nr): {output_nr = port_nr; initHigh();}      
+      on logicalBinaryOutput.initLow(port_nr):  {output_nr = port_nr; initLow();}      
     }
     [state.High]
     {
-      on binaryInput.risingEdgeDetected(): { }
-      on binaryInput.fallingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.Low; logicalInput.fallingEdge();}
-      on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.High);
-      on logicalInput.initialize(): illegal;
-      on logicalInput.terminate(): {terminate();}
+      on logicalBinaryOutput.set(): {}
+      on logicalBinaryOutput.reset(): {hardwareBinaryOutput.reset(output_nr); state=LogicalState.Low;}
+      on logicalBinaryOutput.terminate(): state=LogicalState.NotInitialised;      
+      on logicalBinaryOutput.initHigh(port_nr): illegal;
+      on logicalBinaryOutput.initLow(port_nr): illegal;      
     }
     [state.Low]
     {
-    	on binaryInput.risingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.High; logicalInput.risingEdge();}
-    	on binaryInput.fallingEdgeDetected(): { }
-    	on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.Low);
-    	on logicalInput.initialize(): illegal;
-      on logicalInput.terminate(): {terminate();}    	
-    }
-     
-    void initializeFromHardware(integer port_nr)
-    {
-      IHardwareBinaryInput.BinaryState s = binaryInput.readCurrentState(port_nr);
-      if (s == IHardwareBinaryInput.BinaryState.High) 
-      {
-      	state = ILogicalBinaryInput.LogicalState.High;
-      	reply(ILogicalBinaryInput.LogicalState.High);
-      }
-      else
-      { 
-      	state = ILogicalBinaryInput.LogicalState.Low;
-      	reply(ILogicalBinaryInput.LogicalState.Low);      	
-      }
+      on logicalBinaryOutput.set(): {hardwareBinaryOutput.set(output_nr); state=LogicalState.High;}
+      on logicalBinaryOutput.reset(): {}
+      on logicalBinaryOutput.terminate(): state=LogicalState.NotInitialised;      
+      on logicalBinaryOutput.initHigh(port_nr): illegal;
+      on logicalBinaryOutput.initLow(port_nr): illegal;      
+                  
     }
 
-    void terminate()
+    void initHigh()
+    {     
+      hardwareBinaryOutput.set(output_nr);
+      state = LogicalState.High;        
+    }    
+
+    void initLow()
     {
-    	state = ILogicalBinaryInput.LogicalState.NotInitialised;
-    	reply(ILogicalBinaryInput.LogicalState.NotInitialised); 
-    }
-  }	
+      hardwareBinaryOutput.reset(output_nr);
+      state = LogicalState.Low;        
+    }    
+    
+  } 
 }
+
+
