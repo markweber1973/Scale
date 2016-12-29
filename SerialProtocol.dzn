@@ -1,0 +1,122 @@
+import BinaryInput.dzn;
+import BinaryOutput.dzn;
+import Register.dzn;
+
+interface ISerialProtocol
+{
+  extern integer $int$;
+  
+  in void enable(integer input_port, integer output_port);
+  in void disable();
+  in void startRetrieveValue();
+  in void stopRetrieveValue();  
+  out void valueAvailable(integer newValue);
+    
+  behaviour
+  {
+    enum OperationalState { Disabled, Enabled};
+    OperationalState operationalState = OperationalState.Disabled; 
+  
+    [operationalState.Disabled]
+    {
+      on enable:{operationalState = OperationalState.Enabled;}
+      on disable:{}    
+      on startRetrieveValue:illegal;
+      on stopRetrieveValue:illegal;
+    }  
+    [operationalState.Enabled]
+    {
+      on enable:{}      
+      on disable:{operationalState = OperationalState.Disabled;}
+      on startRetrieveValue:{}  
+      on stopRetrieveValue:{}
+    }      
+  }
+}
+
+component SerialProtocol
+{
+  provides ISerialProtocol serialProtocol;
+  requires ILogicalBinaryInput  input;
+  requires ILogicalBinaryOutput output;
+  requires IRegister register;
+  
+  behaviour
+  {
+    enum State {Enabled, Disabled, WaitForDataAvailable, ReadingData};
+    bool lastBitWritten = false;    
+    State state = State.Disabled;
+    [state.Disabled]
+    {
+      on serialProtocol.enable(input_port, output_port): InitializePorts(input_port, output_port);
+      on serialProtocol.disable(): {}      
+    }
+    [state.Enabled]
+    {
+      on serialProtocol.disable(): {input.terminate(); output.terminate(); state = State.Disabled;}
+      on serialProtocol.enable(input_port, output_port): {}
+      on input.fallingEdge(): {output.reset();} 
+      on input.risingEdge(): {output.set();}
+      on serialProtocol.startRetrieveValue():
+      {
+        lastBitWritten = false; 
+        output.reset(); 
+        register.reset(); 
+        state = State.WaitForDataAvailable;
+      }    
+      on serialProtocol.stopRetrieveValue():illegal;     
+    }
+    [state.WaitForDataAvailable]
+    {
+      on serialProtocol.stopRetrieveValue():{state = State.Enabled;}    
+      on serialProtocol.startRetrieveValue():illegal;     
+      on input.fallingEdge():
+      {
+        ILogicalBinaryInput.LogicalState inputState = input.readCurrentState();      
+        generateClockTick();
+        if (inputState.High)
+        {
+          register.writeHigh();
+        }
+        else if (inputState.Low)
+        {
+          register.writeLow();          
+        }
+        else
+        {
+          illegal;
+        }        
+        state = State.ReadingData;
+      }
+    }
+    [state.ReadingData]
+    {
+      on register.bitWritten():{}
+      on register.lastBitWritten():{}      
+    }
+
+    void InitializePorts(ILogicalBinaryInput.PortNr input_port, ILogicalBinaryOutput.PortNr output_port)
+    {
+      ILogicalBinaryInput.LogicalState localState = input.initialize(input_port);
+
+      bool inputHigh = (localState == ILogicalBinaryInput.LogicalState.High);
+      if (inputHigh)
+      {
+        output.initHigh(output_port);
+      }
+      else
+      {
+        output.initLow(output_port);        
+      }
+      state = State.Enabled;
+    }   
+    
+    void generateClockTick()
+    {
+      output.set();
+      output.reset();
+    }
+    
+  }  
+}
+

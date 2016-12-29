@@ -1,0 +1,25 @@
+import BinaryInput.dzn;
+import BinaryOutput.dzn;
+import SerialProtocol.dzn;
+
+component SerialProtocolSystem 
+{
+  provides ISerialProtocol pISerialProtocolSystem;
+  requires IHardwareBinaryOutput rIOutput;  
+  requires IHardwareBinaryInput rIInput;  
+  requires IRegister rIRegister;  
+
+  system
+  {
+    SerialProtocol cSerialProtocol;
+    LogicalBinaryOutput cLogicOutput;
+    LogicalBinaryInput cLogicInput;
+
+    pISerialProtocolSystem <=> cSerialProtocol.serialProtocol;
+    cLogicOutput.hardwareBinaryOutput <=> rIOutput;
+    cLogicInput.binaryInput <=> rIInput;   
+    cSerialProtocol.output <=> cLogicOutput.logicalBinaryOutput;
+    cSerialProtocol.input <=> cLogicInput.logicalInput;
+    cSerialProtocol.register <=> rIRegister;    
+  } 
+}

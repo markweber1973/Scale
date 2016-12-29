@@ -1,0 +1,18 @@
+interface IRegister
+{
+  extern integer $int$;  
+
+  in void reset();
+  in void writeHigh();  
+  in void writeLow();  
+  out void value(integer theVal);
+  out void bitWritten();
+  out void lastBitWritten();  
+
+  behaviour
+  {
+    on reset:{}
+    on writeHigh:{}  
+    on writeLow:{} 
+  }  
+}
