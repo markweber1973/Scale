@@ -20,17 +20,18 @@ interface ISerialProtocol
     [operationalState.Disabled]
     {
       on enable:{operationalState = OperationalState.Enabled;}
-      on disable:{}    
+      on disable:illegal;    
       on startRetrieveValue:illegal;
       on stopRetrieveValue:illegal;
     }  
     [operationalState.Enabled]
     {
-      on enable:{}      
+      on enable:illegal;      
       on disable:{operationalState = OperationalState.Disabled;}
-      on startRetrieveValue:{}  
+      on startRetrieveValue:{}       
       on stopRetrieveValue:{}
-    }      
+      on optional: valueAvailable;
+    }
   }
 }
 
@@ -44,70 +45,72 @@ component SerialProtocol
   behaviour
   {
     enum State {Enabled, Disabled, WaitForDataAvailable, ReadingData};
-    bool lastBitWritten = false;    
     State state = State.Disabled;
     [state.Disabled]
     {
-      on serialProtocol.enable(input_port, output_port): InitializePorts(input_port, output_port);
-      on serialProtocol.disable(): {}      
+      on serialProtocol.enable(input_port, output_port): 
+      {
+        InitializePorts(input_port, output_port);
+        state = State.Enabled;
+      }
     }
     [state.Enabled]
     {
-      on serialProtocol.disable(): {input.terminate(); output.terminate(); state = State.Disabled;}
-      on serialProtocol.enable(input_port, output_port): {}
+      on serialProtocol.disable(): Disable(); 
       on input.fallingEdge(): {output.reset();} 
       on input.risingEdge(): {output.set();}
       on serialProtocol.startRetrieveValue():
       {
-        lastBitWritten = false; 
-        output.reset(); 
-        register.reset(); 
+        output.reset();        
+        register.initialize(); 
         state = State.WaitForDataAvailable;
       }    
-      on serialProtocol.stopRetrieveValue():illegal;     
+      on serialProtocol.stopRetrieveValue():{register.terminate();}     
     }
     [state.WaitForDataAvailable]
     {
-      on serialProtocol.stopRetrieveValue():{state = State.Enabled;}    
-      on serialProtocol.startRetrieveValue():illegal;     
-      on input.fallingEdge():
+      on serialProtocol.disable(): Disable();      
+      on serialProtocol.stopRetrieveValue():
       {
-        ILogicalBinaryInput.LogicalState inputState = input.readCurrentState();      
+        register.terminate();
+        state = State.Enabled;
+      }    
+      on serialProtocol.startRetrieveValue():{}  
+      on input.fallingEdge():
+      {              
         generateClockTick();
-        if (inputState.High)
-        {
-          register.writeHigh();
-        }
-        else if (inputState.Low)
-        {
-          register.writeLow();          
-        }
-        else
-        {
-          illegal;
-        }        
+        ILogicalBinaryInput.LogicalState inputState = input.readCurrentState(); 
+        updateRegister(inputState);
         state = State.ReadingData;
       }
+      on input.risingEdge(): {}      
     }
     [state.ReadingData]
     {
-      on register.bitWritten():{}
-      on register.lastBitWritten():{}      
+      on register.bitWritten():
+      {        
+        register.prepareForNextBit();
+        generateClockTick();
+        ILogicalBinaryInput.LogicalState inputState = input.readCurrentState(); 
+        updateRegister(inputState);        
+      }
+      on register.lastBitWritten(value):
+      {        
+        generateClockTick();
+        serialProtocol.valueAvailable(value);
+        register.terminate();        
+        state = State.Enabled;
+      }      
+      on input.fallingEdge(): {}
+      on input.risingEdge(): {}
+      on serialProtocol.stopRetrieveValue():{register.terminate();state = State.Enabled;}
+      on serialProtocol.disable(): Disable();
     }
 
     void InitializePorts(ILogicalBinaryInput.PortNr input_port, ILogicalBinaryOutput.PortNr output_port)
     {
       ILogicalBinaryInput.LogicalState localState = input.initialize(input_port);
-
-      bool inputHigh = (localState == ILogicalBinaryInput.LogicalState.High);
-      if (inputHigh)
-      {
-        output.initHigh(output_port);
-      }
-      else
-      {
-        output.initLow(output_port);        
-      }
+      output.initLow(output_port);        
       state = State.Enabled;
     }   
     
@@ -117,6 +120,24 @@ component SerialProtocol
       output.reset();
     }
     
+    void updateRegister(ILogicalBinaryInput.LogicalState state)
+    {     
+      if (state == ILogicalBinaryInput.LogicalState.High)
+      {
+        register.setLSB();
+      }
+      else
+      {
+        register.resetLSB();          
+      }      
+    }
+    void Disable()
+    {
+        input.terminate(); 
+        output.terminate(); 
+        register.terminate();        
+        state = State.Disabled;      
+    }
   }  
 }
 

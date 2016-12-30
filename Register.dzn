@@ -2,17 +2,37 @@ interface IRegister
 {
   extern integer $int$;  
 
-  in void reset();
-  in void writeHigh();  
-  in void writeLow();  
+  in void initialize();
+  in void terminate();  
+  in void setLSB();  
+  in void resetLSB();
+  in void prepareForNextBit();  
   out void value(integer theVal);
   out void bitWritten();
-  out void lastBitWritten();  
+  out void lastBitWritten(integer theVal);  
 
   behaviour
   {
-    on reset:{}
-    on writeHigh:{}  
-    on writeLow:{} 
+    enum State {Idle, Busy};
+    State state = State.Idle;
+    [state.Idle]
+    {
+      on setLSB:illegal;  
+      on resetLSB:illegal;
+      on prepareForNextBit:illegal;      
+      on initialize:{state = State.Busy;}      
+      on terminate:{}      
+    }
+    [state.Busy]
+    {
+      on setLSB:{bitWritten;state = State.Busy;}  
+      on resetLSB:{bitWritten;state = State.Busy;}
+      on setLSB:{lastBitWritten;state = State.Busy;}  
+      on resetLSB:{lastBitWritten;state = State.Busy;}
+      
+      on prepareForNextBit:{}      
+      on initialize: illegal;
+      on terminate:{state = State.Idle;}
+    }
   }  
 }

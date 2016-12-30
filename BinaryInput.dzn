@@ -22,7 +22,7 @@ interface ILogicalBinaryInput
   extern PortNr $int$;  
   enum LogicalState { High, Low, NotInitialised};	
       
-  in LogicalState initialize(PortNr port_nr);  	
+  in LogicalState initialize(PortNr port_nr);
   in void terminate();  
   in LogicalState readCurrentState();
   out void risingEdge();
