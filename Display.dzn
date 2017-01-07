@@ -1,0 +1,11 @@
+interface IDisplay
+{
+  extern integer $int$;
+  in void showValue(integer value);
+  
+  behaviour
+  {
+    on showValue:{}
+  }
+  
+}

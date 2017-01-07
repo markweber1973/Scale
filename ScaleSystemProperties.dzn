@@ -1,0 +1,13 @@
+interface IScaleSystemProperties
+{
+  extern intervalType $int$;
+
+  in void GetMeasureWeightInterval(out intervalType interval);
+  in void GetStabilizeInterval(out intervalType interval);
+
+  behaviour
+  {
+    on GetMeasureWeightInterval: {}
+    on GetStabilizeInterval: {}   
+  }  
+}

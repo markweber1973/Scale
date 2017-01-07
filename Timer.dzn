@@ -1,0 +1,31 @@
+interface ITimer
+{
+  extern integer $int$;  
+   
+  in void initializeOneShot(integer interval);
+  //in void initializePeriodic(integer interval);
+   
+  in void terminate();  
+  out void expired();  
+
+  behaviour
+  {
+    enum State {Idle, Running};
+    State state = State.Idle;
+  
+    [state.Idle]
+    { 
+      on initializeOneShot: state = State.Running;
+//      on initializePeriodic:state = State.Running;     
+      on terminate:{} 
+    }
+    [state.Running]
+    {
+      on initializeOneShot:illegal;
+//      on initializePeriodic:illegal;            
+      on terminate:state = State.Idle;
+      on inevitable: {expired;state = State.Idle;}   
+    }      
+  }  
+}
+

@@ -1,7 +1,7 @@
 interface IRegister
 {
   extern integer $int$;  
-
+   
   in void initialize();
   in void terminate();  
   in void setLSB();  
@@ -13,26 +13,56 @@ interface IRegister
 
   behaviour
   {
-    enum State {Idle, Busy};
-    State state = State.Idle;
+    enum State {Idle, NoBitsWritten, BitsWritten};
+    subint BitNumbers {0..3};    
+    State state = State.Idle;    
+    BitNumbers bitNumber = 0;   
+
     [state.Idle]
     {
       on setLSB:illegal;  
       on resetLSB:illegal;
       on prepareForNextBit:illegal;      
-      on initialize:{state = State.Busy;}      
+      on initialize:{resetBitNumber(); state = State.NoBitsWritten;}      
       on terminate:{}      
     }
-    [state.Busy]
+    [state.NoBitsWritten]
     {
-      on setLSB:{bitWritten;state = State.Busy;}  
-      on resetLSB:{bitWritten;state = State.Busy;}
-      on setLSB:{lastBitWritten;state = State.Busy;}  
-      on resetLSB:{lastBitWritten;state = State.Busy;}
-      
-      on prepareForNextBit:{}      
+      on setLSB:{incrementBitNumber();}  
+      on resetLSB:{incrementBitNumber();}      
+      on prepareForNextBit:illegal;      
       on initialize: illegal;
       on terminate:{state = State.Idle;}
     }
+    [state.BitsWritten]
+    {
+      on setLSB:{incrementBitNumber();}  
+      on resetLSB:{incrementBitNumber();}
+           
+      on prepareForNextBit:{} 
+      on initialize: illegal;
+      on terminate:{state = State.Idle;}      
+    }
+    
+    void resetBitNumber()
+    {
+      bitNumber = 0;
+    }
+
+    void incrementBitNumber()    
+    {
+      if (bitNumber == 3)
+      {       
+        lastBitWritten;
+        state = State.Idle;        
+      }
+      else
+      {        
+        bitWritten;
+        bitNumber = bitNumber + 1;        
+        state = State.BitsWritten;        
+      }
+    }
+    
   }  
 }

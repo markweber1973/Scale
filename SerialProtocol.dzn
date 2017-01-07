@@ -20,7 +20,7 @@ interface ISerialProtocol
     [operationalState.Disabled]
     {
       on enable:{operationalState = OperationalState.Enabled;}
-      on disable:illegal;    
+      on disable:{}    
       on startRetrieveValue:illegal;
       on stopRetrieveValue:illegal;
     }  
@@ -45,7 +45,9 @@ component SerialProtocol
   behaviour
   {
     enum State {Enabled, Disabled, WaitForDataAvailable, ReadingData};
-    State state = State.Disabled;
+
+        
+    State state = State.Disabled;  
     [state.Disabled]
     {
       on serialProtocol.enable(input_port, output_port): 
@@ -53,6 +55,7 @@ component SerialProtocol
         InitializePorts(input_port, output_port);
         state = State.Enabled;
       }
+      on serialProtocol.disable():{}
     }
     [state.Enabled]
     {
@@ -62,27 +65,23 @@ component SerialProtocol
       on serialProtocol.startRetrieveValue():
       {
         output.reset();        
-        register.initialize(); 
+        register.initialize();       
         state = State.WaitForDataAvailable;
       }    
-      on serialProtocol.stopRetrieveValue():{register.terminate();}     
+      on serialProtocol.stopRetrieveValue():StopRetrieveValue();     
     }
     [state.WaitForDataAvailable]
     {
       on serialProtocol.disable(): Disable();      
-      on serialProtocol.stopRetrieveValue():
-      {
-        register.terminate();
-        state = State.Enabled;
-      }    
-      on serialProtocol.startRetrieveValue():{}  
+      on serialProtocol.stopRetrieveValue():StopRetrieveValue();
+      on serialProtocol.startRetrieveValue():{}
       on input.fallingEdge():
-      {              
-        generateClockTick();
-        ILogicalBinaryInput.LogicalState inputState = input.readCurrentState(); 
-        updateRegister(inputState);
+      {
         state = State.ReadingData;
-      }
+        generateClockTick();        
+        ILogicalBinaryInput.LogicalState inputState = input.readCurrentState();
+        updateRegister(inputState);                    
+      }           
       on input.risingEdge(): {}      
     }
     [state.ReadingData]
@@ -100,10 +99,11 @@ component SerialProtocol
         serialProtocol.valueAvailable(value);
         register.terminate();        
         state = State.Enabled;
-      }      
+      }
+      
       on input.fallingEdge(): {}
       on input.risingEdge(): {}
-      on serialProtocol.stopRetrieveValue():{register.terminate();state = State.Enabled;}
+      on serialProtocol.stopRetrieveValue():StopRetrieveValue();
       on serialProtocol.disable(): Disable();
     }
 
@@ -131,12 +131,19 @@ component SerialProtocol
         register.resetLSB();          
       }      
     }
+    
     void Disable()
+    {      
+      input.terminate(); 
+      output.terminate(); 
+      register.terminate();        
+      state = State.Disabled;      
+    }
+    
+    void StopRetrieveValue()
     {
-        input.terminate(); 
-        output.terminate(); 
-        register.terminate();        
-        state = State.Disabled;      
+      register.terminate();
+      state = State.Enabled;
     }
   }  
 }

@@ -10,8 +10,8 @@ interface IHardwareBinaryInput
 
   behaviour
   {
-    on optional:  {risingEdgeDetected;}
-    on optional: {fallingEdgeDetected;}
+    on inevitable:  {risingEdgeDetected;}
+    on inevitable: {fallingEdgeDetected;}
     on readCurrentState: reply(BinaryState.High);		
     on readCurrentState: reply(BinaryState.Low);       
   }
@@ -22,7 +22,7 @@ interface ILogicalBinaryInput
   extern PortNr $int$;  
   enum LogicalState { High, Low, NotInitialised};	
       
-  in LogicalState initialize(PortNr port_nr);
+  in LogicalState initialize(PortNr port_nr);  	
   in void terminate();  
   in LogicalState readCurrentState();
   out void risingEdge();
@@ -46,8 +46,8 @@ interface ILogicalBinaryInput
       on initialize: illegal;
       on terminate: {operationalState = OperationalState.NotInitialised;}                 
 
-      on optional:  { risingEdge;}       
-      on optional:  { fallingEdge;}
+      on inevitable:  { risingEdge;}       
+      on inevitable:  { fallingEdge;}
     }       
   }
 }

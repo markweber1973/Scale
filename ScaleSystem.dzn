@@ -1,108 +1,79 @@
- extern integer $int$;
-  
-interface IHardwareBinaryOutput
+import SerialProtocolSystem.dzn;
+import Timer.dzn;
+import Display.dzn;
+import ScaleSystemProperties.dzn;
+
+interface IScaleSystem
 {
-  enum BinaryState { High, Low };
-	   
-  in   BinaryState readCurrentState(integer port_nr);   	
-  out  void risingEdgeDetected();
-  out  void fallingEdgeDetected();
-
-  behaviour
-  {
-    on optional:  {risingEdgeDetected;}
-    on optional: {fallingEdgeDetected;}
-    on readCurrentState: reply(BinaryState.High);		
-    on readCurrentState: reply(BinaryState.Low);       
-  }
-}
-
-interface ILogicalBinaryInput
-{
-  enum LogicalState { High, Low, NotInitialised};	
-      
-  in LogicalState initialize(integer port_nr);  	
-  in LogicalState terminate();  
-  in LogicalState readCurrentState();
-  out void risingEdge();
-  out void fallingEdge();  
-
-  behaviour
-  {
-    enum OperationalState { NotInitialised, Initialised};
-    OperationalState operationalState = OperationalState.NotInitialised; 
-    [operationalState.NotInitialised]
-    {
-      on readCurrentState: reply(LogicalState.NotInitialised);
-      on initialize: {operationalState = OperationalState.Initialised; reply(LogicalState.Low);}
-      on initialize: {operationalState = OperationalState.Initialised; reply(LogicalState.High);}      
-      on terminate:  illegal;             		
-    }
-    [operationalState.Initialised]
-    {
-      on readCurrentState: reply(LogicalState.High);    
-      on readCurrentState: reply(LogicalState.Low);
-      on initialize: illegal;
-      on terminate: {operationalState = OperationalState.NotInitialised ; reply(LogicalState.NotInitialised);}                 
-
-      on optional:  { risingEdge;}       
-      on optional:  { fallingEdge;}
-    }       
-  }
-}
-
-component LogicalBinaryInput
-{
-  provides ILogicalBinaryInput 	logicalInput;
-  requires IHardwareBinaryInput binaryInput;
+  in void enable();
+  in void disable();
   
   behaviour
   {
-    ILogicalBinaryInput.LogicalState state = ILogicalBinaryInput.LogicalState.NotInitialised;
-    [state.NotInitialised]
+    enum State {Disabled, Enabled};
+   
+    State state = State.Disabled;
+    [state.Disabled]
     {
-      on binaryInput.risingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.NotInitialised;}
-      on binaryInput.fallingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.NotInitialised;}
-      on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.NotInitialised);
-      on logicalInput.initialize(port_nr): { initializeFromHardware(port_nr); }
-      on logicalInput.terminate(): illegal;    	
+      on enable: state = State.Enabled;
+      on disable: {}
     }
-    [state.High]
+    [state.Enabled]
     {
-      on binaryInput.risingEdgeDetected(): { }
-      on binaryInput.fallingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.Low; logicalInput.fallingEdge();}
-      on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.High);
-      on logicalInput.initialize(): illegal;
-      on logicalInput.terminate(): {terminate();}
+      on enable: illegal;
+      on disable: state = State.Disabled;
     }
-    [state.Low]
+  }  
+}
+
+component ScaleSystem 
+{
+  provides IScaleSystem pIScaleSystem;
+  requires IScaleSystemProperties rIScaleSystemProperties;  
+  requires ISerialProtocol rISerialProtocol;   
+  requires ITimer rITimer;
+  requires IDisplay rIDisplay;
+  
+  behaviour
+  {
+    enum State {Disabled, Stabilizing, Enabled, Initializing};   
+    State state = State.Disabled;
+    IScaleSystemProperties.intervalType timerInterval;
+
+    [state.Disabled]
     {
-    	on binaryInput.risingEdgeDetected(): {state = ILogicalBinaryInput.LogicalState.High; logicalInput.risingEdge();}
-    	on binaryInput.fallingEdgeDetected(): { }
-    	on logicalInput.readCurrentState():	reply(ILogicalBinaryInput.LogicalState.Low);
-    	on logicalInput.initialize(): illegal;
-      on logicalInput.terminate(): {terminate();}    	
-    }
-     
-    void initializeFromHardware(integer port_nr)
-    {
-      IHardwareBinaryInput.BinaryState s = binaryInput.readCurrentState(port_nr);
-      if (s == IHardwareBinaryInput.BinaryState.High) 
+      on pIScaleSystem.enable(): 
       {
-      	state = ILogicalBinaryInput.LogicalState.High;
-      	reply(ILogicalBinaryInput.LogicalState.High);
+        
+        rIScaleSystemProperties.GetStabilizeInterval(timerInterval);
+        rITimer.initializeOneShot(timerInterval);              
+        state = State.Initializing;
       }
-      else
-      { 
-      	state = ILogicalBinaryInput.LogicalState.Low;
-      	reply(ILogicalBinaryInput.LogicalState.Low);      	
-      }
+      on pIScaleSystem.disable(): {}    
     }
-
-    void terminate()
+    [state.Initializing]
     {
-    	state = ILogicalBinaryInput.LogicalState.NotInitialised;
-    	reply(ILogicalBinaryInput.LogicalState.NotInitialised); 
+      on pIScaleSystem.enable(): illegal;
+      on pIScaleSystem.disable(): {rITimer.terminate(); state = State.Disabled; }
+      on rITimer.expired(): state = State.Enabled;                  
     }
-  }	
+    [state.Enabled]
+    {
+      on pIScaleSystem.enable(): illegal;
+      on pIScaleSystem.disable(): 
+      {
+        rITimer.terminate(); 
+        rISerialProtocol.disable();
+        state = State.Disabled;        
+      }
+      on rITimer.expired(): {rISerialProtocol.startRetrieveValue();}
+      on rISerialProtocol.valueAvailable(value): 
+      {
+        rIDisplay.showValue(value);
+        rITimer.initializeOneShot(timerInterval);        
+      }
+    }
+    
+  }  
+ 
 }
