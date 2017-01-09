@@ -2,78 +2,29 @@ import SerialProtocolSystem.dzn;
 import Timer.dzn;
 import Display.dzn;
 import ScaleSystemProperties.dzn;
+import Scale.dzn;
 
-interface IScaleSystem
+component ScaleSystem
 {
-  in void enable();
-  in void disable();
-  
-  behaviour
-  {
-    enum State {Disabled, Enabled};
-   
-    State state = State.Disabled;
-    [state.Disabled]
-    {
-      on enable: state = State.Enabled;
-      on disable: {}
-    }
-    [state.Enabled]
-    {
-      on enable: illegal;
-      on disable: state = State.Disabled;
-    }
-  }  
-}
-
-component ScaleSystem 
-{
-  provides IScaleSystem pIScaleSystem;
+  provides IScale pIScaleSystem;
   requires IScaleSystemProperties rIScaleSystemProperties;  
-  requires ISerialProtocol rISerialProtocol;   
+  requires IHardwareBinaryInput rIHardwareBinaryInput;
+  requires IHardwareBinaryOutput rIHardwareBinaryOutput;  
+  requires IRegister rIRegister;  
   requires ITimer rITimer;
   requires IDisplay rIDisplay;
-  
-  behaviour
-  {
-    enum State {Disabled, Stabilizing, Enabled, Initializing};   
-    State state = State.Disabled;
-    IScaleSystemProperties.intervalType timerInterval;
 
-    [state.Disabled]
-    {
-      on pIScaleSystem.enable(): 
-      {
-        
-        rIScaleSystemProperties.GetStabilizeInterval(timerInterval);
-        rITimer.initializeOneShot(timerInterval);              
-        state = State.Initializing;
-      }
-      on pIScaleSystem.disable(): {}    
-    }
-    [state.Initializing]
-    {
-      on pIScaleSystem.enable(): illegal;
-      on pIScaleSystem.disable(): {rITimer.terminate(); state = State.Disabled; }
-      on rITimer.expired(): state = State.Enabled;                  
-    }
-    [state.Enabled]
-    {
-      on pIScaleSystem.enable(): illegal;
-      on pIScaleSystem.disable(): 
-      {
-        rITimer.terminate(); 
-        rISerialProtocol.disable();
-        state = State.Disabled;        
-      }
-      on rITimer.expired(): {rISerialProtocol.startRetrieveValue();}
-      on rISerialProtocol.valueAvailable(value): 
-      {
-        rIDisplay.showValue(value);
-        rITimer.initializeOneShot(timerInterval);        
-      }
-    }
-    
-  }  
- 
+  system
+  {
+    Scale cScale;
+    SerialProtocolSystem cSerialProtocolSystem;
+    cScale.pIScaleSystem <=> pIScaleSystem;
+    cScale.rISerialProtocol <=>  cSerialProtocolSystem.pISerialProtocolSystem;
+    cScale.rITimer <=> rITimer;
+    cScale.rIDisplay <=> rIDisplay;
+    cScale.rIScaleSystemProperties <=> rIScaleSystemProperties;
+    rIHardwareBinaryInput <=> cSerialProtocolSystem.rIInput;
+    rIHardwareBinaryOutput <=> cSerialProtocolSystem.rIOutput;    
+    rIRegister <=> cSerialProtocolSystem.rIRegister;    
+  }
 }

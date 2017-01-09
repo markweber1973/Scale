@@ -1,0 +1,14 @@
+interface ITareCompensator
+{
+  extern integer $int$;
+  
+  in void SetTare(in integer tare);
+  in void GetNetWeight(in integer measuredValue, out integer netWeight);
+  
+  behaviour
+  {
+    on SetTare:{}
+    on GetNetWeight:{}
+  }
+   
+}

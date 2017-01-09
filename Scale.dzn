@@ -1,0 +1,131 @@
+import SerialProtocolSystem.dzn;
+import Timer.dzn;
+import Display.dzn;
+import ScaleSystemProperties.dzn;
+import TareCompensator.dzn;
+
+interface IScale
+{
+  in void enable();
+  in void disable();
+  in void tare();
+  
+  behaviour
+  {
+    enum State {Disabled, Enabled};
+   
+    State state = State.Disabled;
+    [state.Disabled]
+    {
+      on enable: state = State.Enabled;
+      on disable: {}
+      on tare: {}
+    }
+    [state.Enabled]
+    {
+      on enable: illegal;
+      on disable: state = State.Disabled;
+      on tare: {}
+    }
+  }  
+}
+
+component Scale 
+{
+  provides IScale pIScaleSystem;
+  requires IScaleSystemProperties rIScaleSystemProperties;  
+  requires ISerialProtocol rISerialProtocol;   
+  requires ITimer rITimer;
+  requires IDisplay rIDisplay;
+  requires ITareCompensator rITareCompensator;  
+  
+  behaviour
+  {
+    enum State {Disabled, Stabilizing, Enabled, Initializing, WaitingForTareValue};   
+    State state = State.Disabled;
+    IScaleSystemProperties.intervalType timerInterval;
+
+    [state.Disabled]
+    {
+      on pIScaleSystem.enable(): 
+      {
+        InitializeProtocol();               
+        rISerialProtocol.startRetrieveValue();        
+        state = State.Initializing;
+      }
+      on pIScaleSystem.disable(): {}
+      on pIScaleSystem.tare(): {}    
+    }
+    [state.Initializing]
+    {
+      on pIScaleSystem.enable(): {}
+      on pIScaleSystem.disable(): 
+      {
+        rITimer.terminate(); 
+        state = State.Disabled;
+      }
+      on pIScaleSystem.tare(): {}      
+      on rISerialProtocol.valueAvailable(value):
+      {
+        rITareCompensator.SetTare(value);
+        ITareCompensator.integer netVal = value;
+        rITareCompensator.GetNetWeight(value, netVal);
+        rIDisplay.showValue(netVal);
+        rIScaleSystemProperties.GetMeasureWeightInterval(timerInterval);        
+        rITimer.initializeOneShot(timerInterval);
+      }                               
+    }
+    [state.Enabled]
+    {
+      on pIScaleSystem.enable(): {}
+      on pIScaleSystem.disable(): 
+      {
+        rITimer.terminate(); 
+        rISerialProtocol.disable();
+        state = State.Disabled;        
+      }
+      on rITimer.expired(): {rISerialProtocol.startRetrieveValue();}
+      on rISerialProtocol.valueAvailable(value): 
+      {
+        ITareCompensator.integer netVal = value;
+        rITareCompensator.GetNetWeight(value, netVal);
+        rIDisplay.showValue(netVal);        
+        rITimer.initializeOneShot(timerInterval);        
+      }
+      on pIScaleSystem.tare(): 
+      {
+        state = State.WaitingForTareValue;
+      }
+    }
+    [state.WaitingForTareValue]
+    {    
+      on pIScaleSystem.enable(): {}
+      on pIScaleSystem.disable(): 
+      {
+        rITimer.terminate(); 
+        rISerialProtocol.disable();
+        state = State.Disabled;        
+      }
+      on rISerialProtocol.valueAvailable(value): 
+      {
+        rITareCompensator.SetTare(value);        
+        ITareCompensator.integer netVal = value;
+        rITareCompensator.GetNetWeight(value, netVal);
+        rIDisplay.showValue(netVal);        
+        rITimer.initializeOneShot(timerInterval);        
+      }      
+      on pIScaleSystem.tare(): {}            
+    }
+    
+    
+    
+    void InitializeProtocol()
+    {
+      IScaleSystemProperties.PortNumber dataPortNr;
+      IScaleSystemProperties.PortNumber clockPortNr;        
+      rIScaleSystemProperties.GetDataPort(dataPortNr);
+      rIScaleSystemProperties.GetClockPort(clockPortNr);
+      rISerialProtocol.enable(clockPortNr, dataPortNr);   
+    }    
+  }    
+}

@@ -1,13 +1,18 @@
 interface IScaleSystemProperties
 {
   extern intervalType $int$;
+  extern PortNumber $int$;  
 
   in void GetMeasureWeightInterval(out intervalType interval);
   in void GetStabilizeInterval(out intervalType interval);
-
+  in void GetDataPort(out PortNumber portNr);
+  in void GetClockPort(out PortNumber portNr);  
+  
   behaviour
   {
     on GetMeasureWeightInterval: {}
-    on GetStabilizeInterval: {}   
+    on GetStabilizeInterval: {}
+    on GetDataPort: {}
+    on GetClockPort: {}     
   }  
 }
