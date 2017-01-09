@@ -27,8 +27,8 @@ interface ISerialProtocol
     [operationalState.Enabled]
     {
       on enable:illegal;      
-      on disable:{operationalState = OperationalState.Disabled;}
-      on startRetrieveValue:{}       
+      on disable:{operationalState = OperationalState.Disabled;}      
+      on startRetrieveValue:{}      
       on stopRetrieveValue:{}
       on optional: valueAvailable;
     }

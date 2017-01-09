@@ -13,6 +13,7 @@ component ScaleSystem
   requires IRegister rIRegister;  
   requires ITimer rITimer;
   requires IDisplay rIDisplay;
+  requires ITareCompensator rITareCompensator;
 
   system
   {
@@ -23,6 +24,7 @@ component ScaleSystem
     cScale.rITimer <=> rITimer;
     cScale.rIDisplay <=> rIDisplay;
     cScale.rIScaleSystemProperties <=> rIScaleSystemProperties;
+    cScale.rITareCompensator <=> rITareCompensator;    
     rIHardwareBinaryInput <=> cSerialProtocolSystem.rIInput;
     rIHardwareBinaryOutput <=> cSerialProtocolSystem.rIOutput;    
     rIRegister <=> cSerialProtocolSystem.rIRegister;    

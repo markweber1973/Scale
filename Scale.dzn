@@ -41,10 +41,9 @@ component Scale
   
   behaviour
   {
-    enum State {Disabled, Stabilizing, Enabled, Initializing, WaitingForTareValue};   
-    State state = State.Disabled;
+    enum State {Disabled, Enabled, Initializing, WaitingForValue, WaitingForTareValue};   
     IScaleSystemProperties.intervalType timerInterval;
-
+    State state = State.Disabled;
     [state.Disabled]
     {
       on pIScaleSystem.enable(): 
@@ -54,71 +53,70 @@ component Scale
         state = State.Initializing;
       }
       on pIScaleSystem.disable(): {}
-      on pIScaleSystem.tare(): {}    
+      on pIScaleSystem.tare(): {}   
+      on rITimer.expired(): illegal;
     }
     [state.Initializing]
     {
-      on pIScaleSystem.enable(): {}
-      on pIScaleSystem.disable(): 
-      {
-        rITimer.terminate(); 
-        state = State.Disabled;
-      }
+      on pIScaleSystem.enable(): illegal;
+      on pIScaleSystem.disable(): DisableScale();
       on pIScaleSystem.tare(): {}      
       on rISerialProtocol.valueAvailable(value):
       {
         rITareCompensator.SetTare(value);
-        ITareCompensator.integer netVal = value;
-        rITareCompensator.GetNetWeight(value, netVal);
-        rIDisplay.showValue(netVal);
+        ShowNetWeight(value);        
         rIScaleSystemProperties.GetMeasureWeightInterval(timerInterval);        
         rITimer.initializeOneShot(timerInterval);
-      }                               
+        state = State.Enabled;        
+      }                    
+      on rITimer.expired(): illegal;
     }
     [state.Enabled]
     {
-      on pIScaleSystem.enable(): {}
-      on pIScaleSystem.disable(): 
+      on pIScaleSystem.enable(): illegal;
+      on pIScaleSystem.disable(): DisableScale();
+      on rITimer.expired(): 
       {
-        rITimer.terminate(); 
-        rISerialProtocol.disable();
-        state = State.Disabled;        
+        rISerialProtocol.startRetrieveValue();
+        state = State.WaitingForValue;
+      }     
+      on pIScaleSystem.tare(): 
+      {
+        rITimer.terminate();
+        rISerialProtocol.startRetrieveValue();
+        state = State.WaitingForTareValue;
       }
-      on rITimer.expired(): {rISerialProtocol.startRetrieveValue();}
+      on rISerialProtocol.valueAvailable(value): {}      
+    }
+    [state.WaitingForValue]
+    {
+      on pIScaleSystem.enable(): illegal;
+      on pIScaleSystem.disable(): DisableScale();
       on rISerialProtocol.valueAvailable(value): 
       {
-        ITareCompensator.integer netVal = value;
-        rITareCompensator.GetNetWeight(value, netVal);
-        rIDisplay.showValue(netVal);        
-        rITimer.initializeOneShot(timerInterval);        
+        ShowNetWeight(value);
+        rITimer.initializeOneShot(timerInterval);
+        state = State.Enabled;                
       }
       on pIScaleSystem.tare(): 
       {
         state = State.WaitingForTareValue;
-      }
-    }
+      }                  
+    }    
     [state.WaitingForTareValue]
     {    
-      on pIScaleSystem.enable(): {}
-      on pIScaleSystem.disable(): 
-      {
-        rITimer.terminate(); 
-        rISerialProtocol.disable();
-        state = State.Disabled;        
-      }
+      on pIScaleSystem.enable(): illegal;
+      on pIScaleSystem.disable(): DisableScale();
       on rISerialProtocol.valueAvailable(value): 
       {
         rITareCompensator.SetTare(value);        
-        ITareCompensator.integer netVal = value;
-        rITareCompensator.GetNetWeight(value, netVal);
-        rIDisplay.showValue(netVal);        
-        rITimer.initializeOneShot(timerInterval);        
+        ShowNetWeight(value);
+        rITimer.initializeOneShot(timerInterval);    
+        state = State.Enabled;    
       }      
       on pIScaleSystem.tare(): {}            
     }
-    
-    
-    
+       
     void InitializeProtocol()
     {
       IScaleSystemProperties.PortNumber dataPortNr;
@@ -126,6 +124,20 @@ component Scale
       rIScaleSystemProperties.GetDataPort(dataPortNr);
       rIScaleSystemProperties.GetClockPort(clockPortNr);
       rISerialProtocol.enable(clockPortNr, dataPortNr);   
-    }    
+    }  
+    
+    void DisableScale()
+    {
+        rISerialProtocol.disable();        
+        rITimer.terminate(); 
+        state = State.Disabled;             
+    }  
+    
+    void ShowNetWeight(ITareCompensator.integer measuredValue)
+    {
+        ITareCompensator.integer netVal;
+        rITareCompensator.GetNetWeight(measuredValue, netVal);
+        rIDisplay.showValue(netVal);        
+    }
   }    
 }
