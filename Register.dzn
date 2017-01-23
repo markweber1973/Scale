@@ -14,7 +14,7 @@ interface IRegister
   behaviour
   {
     enum State {Idle, NoBitsWritten, BitsWritten};
-    subint BitNumbers {0..3};    
+    subint BitNumbers {0..24};    
     State state = State.Idle;    
     BitNumbers bitNumber = 0;   
 
